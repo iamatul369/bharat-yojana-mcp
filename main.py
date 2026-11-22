@@ -98,23 +98,39 @@ Always call `discover_schemes_logic` and `search_guidelines_logic` to check veri
 
 @app.post("/chat", dependencies=[Depends(check_rate_limit)])
 def public_chat(req: ChatRequest):
+    # Auto-discover all available Gemini Flash models for your API key
+    try:
+        available = [
+            m.name.replace("models/", "")
+            for m in ai_client.models.list()
+            if "flash" in m.name.lower() and "image" not in m.name.lower() and "audio" not in m.name.lower()
+        ]
+    except Exception:
+        available = []
+
+    candidates = available or ["gemini-3.8-flash", "gemini-3-flash-preview", "gemini-2.5-flash-lite"]
     last_err = ""
-    for model_name in ["gemini-3.8-flash-lite", "gemini-3.8-flash", "gemini-2.0-flash"]:
-        try:
-            response = ai_client.models.generate_content(
-                model=model_name,
-                contents=req.message,
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_PROMPT,
-                    tools=[discover_schemes_logic, search_guidelines_logic],
-                    temperature=0.2,
-                ),
-            )
-            return {"reply": response.text or "No matching information found."}
-        except Exception as e:
-            last_err = str(e)
-            continue
-    return {"reply": f"Google AI free tier is temporarily busy. Please retry in 5 seconds. ({last_err})"}
+
+    for model_name in candidates[:4]:
+        for attempt in range(2):  # Retry once if 503 busy
+            try:
+                response = ai_client.models.generate_content(
+                    model=model_name,
+                    contents=req.message,
+                    config=types.GenerateContentConfig(
+                        system_instruction=SYSTEM_PROMPT,
+                        tools=[discover_schemes_logic, search_guidelines_logic],
+                        temperature=0.2,
+                    ),
+                )
+                return {"reply": response.text or "No matching information found."}
+            except Exception as e:
+                last_err = f"[{model_name}] {str(e)}"
+                if "503" in last_err:
+                    time.sleep(1.5)
+                    continue
+                break
+    return {"reply": f"Temporary issue: {last_err}"}
 
 @app.get("/api/discover", dependencies=[Depends(check_rate_limit), Depends(verify_token)])
 def api_discover_schemes(target_group: Optional[str] = None, benefit_type: Optional[str] = None):
