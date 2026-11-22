@@ -3,18 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>🇮🇳 Bharat Central Schemes AI</title>
+  <title>Bharat Central Schemes AI</title>
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; background: #f4f6f9; margin: 0; display: flex; justify-content: center; height: 100vh; }
-    .container { width: 100%; max-width: 780px; background: #fff; display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-    header { background: #1e3a8a; color: #fff; padding: 16px 20px; }
-    header h1 { margin: 0; font-size: 1.25rem; }
-    header p { margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9; }
+    .container { width: 100%; max-width: 820px; background: #fff; display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    header { background: #1e3a8a; color: #fff; padding: 16px 20px; display: flex; align-items: center; gap: 12px; }
+    .flag { width: 34px; height: 22px; border-radius: 3px; box-shadow: 0 1px 3px rgba(0,0,0,0.3); flex-shrink: 0; }
+    header h1 { margin: 0; font-size: 1.2rem; }
+    header p { margin: 3px 0 0; font-size: 0.84rem; opacity: 0.9; }
     .examples { display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 16px; background: #eff6ff; border-bottom: 1px solid #dbeafe; }
-    .chip { background: #fff; border: 1px solid #bfdbfe; color: #1d4ed8; padding: 6px 10px; border-radius: 16px; font-size: 0.78rem; cursor: pointer; }
+    .chip { background: #fff; border: 1px solid #bfdbfe; color: #1d4ed8; padding: 6px 10px; border-radius: 16px; font-size: 0.78rem; cursor: pointer; text-align: left; }
     .chip:hover { background: #dbeafe; }
     #chat { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
-    .msg { max-width: 82%; padding: 12px 16px; border-radius: 14px; line-height: 1.5; font-size: 0.95rem; white-space: pre-wrap; }
+    .msg { max-width: 84%; padding: 12px 16px; border-radius: 14px; line-height: 1.55; font-size: 0.95rem; white-space: pre-wrap; }
     .user { align-self: flex-end; background: #2563eb; color: #fff; border-bottom-right-radius: 4px; }
     .bot { align-self: flex-start; background: #f1f5f9; color: #0f172a; border-bottom-left-radius: 4px; }
     form { display: flex; gap: 10px; padding: 14px; border-top: 1px solid #e2e8f0; background: #fff; }
@@ -26,12 +27,22 @@
 <body>
   <div class="container">
     <header>
-      <h1>🇮🇳 Bharat Central Schemes & Opportunities AI</h1>
-      <p>Ask about Central Government schemes, scholarships, startup grants & subsidies</p>
+      <svg class="flag" viewBox="0 0 900 600" xmlns="http://w3.org">
+        <rect width="900" height="200" fill="#FF9933"/>
+        <rect y="200" width="900" height="200" fill="#FFFFFF"/>
+        <rect y="400" width="900" height="200" fill="#138808"/>
+        <circle cx="450" cy="300" r="85" fill="none" stroke="#000080" stroke-width="14"/>
+        <circle cx="450" cy="300" r="18" fill="#000080"/>
+      </svg>
+      <div>
+        <h1>Bharat Central Schemes & Opportunities AI</h1>
+        <p>Ask about Central Government schemes, scholarships, startup grants & subsidies</p>
+      </div>
     </header>
     <div class="examples">
       <button class="chip" onclick="sendPreset(this.innerText)">I am a 1st-year engineering girl student with ₹5L family income. What scholarships can I get?</button>
       <button class="chip" onclick="sendPreset(this.innerText)">I registered a DPIIT startup 6 months ago. What seed funds or grants am I eligible for?</button>
+      <button class="chip" onclick="sendPreset(this.innerText)">Show all Central schemes for small businesses and MSMEs</button>
       <button class="chip" onclick="sendPreset(this.innerText)">How much subsidy do I get under PM Surya Ghar for 3kW solar?</button>
     </div>
     <div id="chat">
@@ -70,7 +81,7 @@
       addMsg(q, "user");
       input.value = "";
       btn.disabled = true;
-      const loading = addMsg("Checking official schemes & guidelines...", "bot");
+      const loading = addMsg("Checking official Central Government schemes...", "bot");
 
       try {
         const res = await fetch("/chat", {
