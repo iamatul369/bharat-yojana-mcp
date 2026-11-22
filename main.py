@@ -98,19 +98,22 @@ Always call `discover_schemes_logic` and `search_guidelines_logic` to check veri
 
 @app.post("/chat", dependencies=[Depends(check_rate_limit)])
 def public_chat(req: ChatRequest):
-    try:
-        response = ai_client.models.generate_content(
-            model="gemini-3.8-flash",
-            contents=req.message,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                tools=[discover_schemes_logic, search_guidelines_logic],
-                temperature=0.2,
-            ),
-        )
-        return {"reply": response.text or "No matching information found."}
-    except Exception as e:
-        return {"reply": f"Backend error: {str(e)}"}
+    for model_name in ["gemini-3.8-flash", "gemini-3.8-flash-lite"]:
+        try:
+            response = ai_client.models.generate_content(
+                model=model_name,
+                contents=req.message,
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT,
+                    tools=[discover_schemes_logic, search_guidelines_logic],
+                    temperature=0.2,
+                ),
+            )
+            return {"reply": response.text or "No matching information found."}
+        except Exception as e:
+            last_err = str(e)
+            continue
+    return {"reply": f"All AI models are temporarily busy. Please retry in a few seconds. ({last_err})"}
 
 @app.get("/api/discover", dependencies=[Depends(check_rate_limit), Depends(verify_token)])
 def api_discover_schemes(target_group: Optional[str] = None, benefit_type: Optional[str] = None):
