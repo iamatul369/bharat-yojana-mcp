@@ -100,7 +100,7 @@ Always call `discover_schemes_logic` and `search_guidelines_logic` to check veri
 def public_chat(req: ChatRequest):
     try:
         response = ai_client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini-3.8-flash",
             contents=req.message,
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_PROMPT,
