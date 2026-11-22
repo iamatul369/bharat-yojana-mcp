@@ -11,7 +11,7 @@ from supabase import create_client
 from google import genai
 from google.genai import types
 
-SUPABASE_URL = os.environ["SUPABASE_URL"]
+SUPABASE_URL = os.environ["SUPABASE_URL"].rstrip("/")
 SUPABASE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
 GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
 API_SECRET_TOKEN = os.environ.get("API_SECRET_TOKEN", "bharat-public-2026")
@@ -53,7 +53,7 @@ def search_guidelines_logic(question: str, target_group: str = "") -> list[dict]
         contents=question,
         config=types.EmbedContentConfig(output_dimensionality=768),
     )
-    emb = emb_res.embeddings.values
+    emb = emb_res.embeddings[0].values
     res = supabase.rpc("match_central_docs", {
         "query_embedding": emb,
         "match_count": 4,
@@ -80,7 +80,7 @@ app = FastAPI(
     title="Bharat Central Schemes & Opportunities API",
     description="Discover Indian Central Government schemes, scholarships, startup grants, and subsidies.",
     version="1.0.0",
-    servers=[{"url": "https://onrender.com"}],
+    servers=[{"url": "https://bharat-yojana-mcp.onrender.com"}],
     lifespan=mcp_app.lifespan,
 )
 
@@ -90,15 +90,19 @@ app.mount("/mcp", mcp_app)
 def serve_chat_ui():
     return FileResponse("index.html")
 
+class ChatTurn(BaseModel):
+    role: str
+    text: str
+
 class ChatRequest(BaseModel):
     message: str
+    history: list[ChatTurn] = []
 
-SYSTEM_PROMPT = """You are 'Bharat Yojana Sahayak', an AI assistant helping Indian citizens, students, and business founders discover Central Government schemes, scholarships, startup grants, and subsidies.
-Always call `discover_schemes_logic` and `search_guidelines_logic` to check verified data before answering. Present clear scheme names, ministries, INR benefit limits, eligibility rules, and official portal URLs."""
+SYSTEM_PROMPT = """You are 'Bharat Yojana Sahayak', an expert AI assistant helping Indian citizens, students, and business founders discover Central Government schemes, scholarships, startup grants, and subsidies.
+Always call `discover_schemes_logic` and `search_guidelines_logic` to check verified data before answering. Use conversation history to answer follow-up questions accurately. Present clear scheme names, ministries, INR benefit limits, eligibility rules, and clickable official portal URLs."""
 
 @app.post("/chat", dependencies=[Depends(check_rate_limit)])
 def public_chat(req: ChatRequest):
-    # Auto-discover all available Gemini Flash models for your API key
     try:
         available = [
             m.name.replace("models/", "")
@@ -111,12 +115,21 @@ def public_chat(req: ChatRequest):
     candidates = available or ["gemini-3.8-flash", "gemini-3-flash-preview", "gemini-2.5-flash-lite"]
     last_err = ""
 
+    conversation = [
+        types.Content(role=turn.role, parts=[types.Part.from_text(text=turn.text)])
+        for turn in req.history
+        if turn.role in ("user", "model")
+    ]
+    conversation.append(
+        types.Content(role="user", parts=[types.Part.from_text(text=req.message)])
+    )
+
     for model_name in candidates[:4]:
-        for attempt in range(2):  # Retry once if 503 busy
+        for attempt in range(2):
             try:
                 response = ai_client.models.generate_content(
                     model=model_name,
-                    contents=req.message,
+                    contents=conversation,
                     config=types.GenerateContentConfig(
                         system_instruction=SYSTEM_PROMPT,
                         tools=[discover_schemes_logic, search_guidelines_logic],
