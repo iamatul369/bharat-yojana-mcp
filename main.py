@@ -70,6 +70,7 @@ app = FastAPI(
     title="Bharat Central Schemes & Opportunities API",
     description="Discover Indian Central Government schemes, scholarships, startup grants, and subsidies for Students, Businesses, and Citizens.",
     version="1.0.0",
+    servers=[{"url": "https://bharat-yojana-mcp.onrender.com"}],
     lifespan=mcp_app.lifespan,
 )
 
