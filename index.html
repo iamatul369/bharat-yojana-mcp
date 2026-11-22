@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🇮🇳 Bharat Central Schemes AI</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f4f6f9; margin: 0; display: flex; justify-content: center; height: 100vh; }
+    .container { width: 100%; max-width: 780px; background: #fff; display: flex; flex-direction: column; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    header { background: #1e3a8a; color: #fff; padding: 16px 20px; }
+    header h1 { margin: 0; font-size: 1.25rem; }
+    header p { margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9; }
+    .examples { display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 16px; background: #eff6ff; border-bottom: 1px solid #dbeafe; }
+    .chip { background: #fff; border: 1px solid #bfdbfe; color: #1d4ed8; padding: 6px 10px; border-radius: 16px; font-size: 0.78rem; cursor: pointer; }
+    .chip:hover { background: #dbeafe; }
+    #chat { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+    .msg { max-width: 82%; padding: 12px 16px; border-radius: 14px; line-height: 1.5; font-size: 0.95rem; white-space: pre-wrap; }
+    .user { align-self: flex-end; background: #2563eb; color: #fff; border-bottom-right-radius: 4px; }
+    .bot { align-self: flex-start; background: #f1f5f9; color: #0f172a; border-bottom-left-radius: 4px; }
+    form { display: flex; gap: 10px; padding: 14px; border-top: 1px solid #e2e8f0; background: #fff; }
+    input { flex: 1; padding: 12px 14px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 0.95rem; outline: none; }
+    button { background: #1e3a8a; color: #fff; border: none; padding: 0 20px; border-radius: 10px; font-weight: 600; cursor: pointer; }
+    button:disabled { opacity: 0.6; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🇮🇳 Bharat Central Schemes & Opportunities AI</h1>
+      <p>Ask about Central Government schemes, scholarships, startup grants & subsidies</p>
+    </header>
+    <div class="examples">
+      <button class="chip" onclick="sendPreset(this.innerText)">I am a 1st-year engineering girl student with ₹5L family income. What scholarships can I get?</button>
+      <button class="chip" onclick="sendPreset(this.innerText)">I registered a DPIIT startup 6 months ago. What seed funds or grants am I eligible for?</button>
+      <button class="chip" onclick="sendPreset(this.innerText)">How much subsidy do I get under PM Surya Ghar for 3kW solar?</button>
+    </div>
+    <div id="chat">
+      <div class="msg bot">Namaste! Tell me if you are a Student, Business/Startup founder, or Citizen—and what kind of support you are looking for.</div>
+    </div>
+    <form id="form">
+      <input id="input" type="text" placeholder="Ask about any Central Govt scheme, grant, or scholarship..." required />
+      <button id="btn" type="submit">Send</button>
+    </form>
+  </div>
+
+  <script>
+    const chat = document.getElementById("chat");
+    const form = document.getElementById("form");
+    const input = document.getElementById("input");
+    const btn = document.getElementById("btn");
+
+    function addMsg(text, cls) {
+      const div = document.createElement("div");
+      div.className = "msg " + cls;
+      div.textContent = text;
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+      return div;
+    }
+
+    function sendPreset(text) {
+      input.value = text;
+      form.dispatchEvent(new Event("submit"));
+    }
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const q = input.value.trim();
+      if (!q) return;
+      addMsg(q, "user");
+      input.value = "";
+      btn.disabled = true;
+      const loading = addMsg("Checking official schemes & guidelines...", "bot");
+
+      try {
+        const res = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: q })
+        });
+        const data = await res.json();
+        loading.textContent = data.reply || data.detail || "No response.";
+      } catch (err) {
+        loading.textContent = "Server is waking up—please try sending again in 5 seconds!";
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
