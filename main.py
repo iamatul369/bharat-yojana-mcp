@@ -36,7 +36,7 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(security)):
         raise HTTPException(status_code=401, detail="Invalid API Key")
 
 
-def discover_schemes_logic(target_group: Optional[str] = None, benefit_type: Optional[str] = None) -> list[dict]:
+def discover_schemes_logic(target_group: str = "", benefit_type: str = "") -> list[dict]:
     """Find Indian Central Government schemes filtered by target_group ('Student', 'Business', 'Citizen') or benefit_type ('Scholarship', 'Subsidy', 'Grant', 'Loan')."""
     q = supabase.table("central_schemes").select("*")
     if target_group:
@@ -46,13 +46,18 @@ def discover_schemes_logic(target_group: Optional[str] = None, benefit_type: Opt
     return q.limit(15).execute().data or []
 
 
-def search_guidelines_logic(question: str, target_group: Optional[str] = None) -> list[dict]:
+def search_guidelines_logic(question: str, target_group: str = "") -> list[dict]:
     """Search official Indian ministry PDF guidelines for exact eligibility criteria, subsidy caps, and application rules."""
-    emb = ai_client.models.embed_content(model="text-embedding-004", contents=question).embeddings.values
+    emb_res = ai_client.models.embed_content(
+        model="gemini-embedding-001",
+        contents=question,
+        config=types.EmbedContentConfig(output_dimensionality=768),
+    )
+    emb = emb_res.embeddings[0].values
     res = supabase.rpc("match_central_docs", {
         "query_embedding": emb,
         "match_count": 4,
-        "filter_group": target_group
+        "filter_group": target_group if target_group else None
     }).execute()
     return res.data or []
 
@@ -60,12 +65,12 @@ def search_guidelines_logic(question: str, target_group: Optional[str] = None) -
 mcp = FastMCP("Bharat-Central-Schemes-Tracker")
 
 @mcp.tool()
-def discover_central_schemes(target_group: Optional[str] = None, benefit_type: Optional[str] = None) -> list[dict]:
+def discover_central_schemes(target_group: str = "", benefit_type: str = "") -> list[dict]:
     """Find Indian Central Government schemes filtered by target_group ('Student', 'Business', 'Citizen') or benefit_type ('Scholarship', 'Subsidy', 'Grant', 'Loan')."""
     return discover_schemes_logic(target_group, benefit_type)
 
 @mcp.tool()
-def search_scheme_guidelines(question: str, target_group: Optional[str] = None) -> list[dict]:
+def search_scheme_guidelines(question: str, target_group: str = "") -> list[dict]:
     """Search official Indian ministry PDF guidelines for exact eligibility criteria, subsidy caps, and application rules."""
     return search_guidelines_logic(question, target_group)
 
@@ -81,7 +86,6 @@ app = FastAPI(
 
 app.mount("/mcp", mcp_app)
 
-# --- Public Chat Webpage & Gemini 2.5 Flash Agent ---
 @app.get("/")
 def serve_chat_ui():
     return FileResponse("index.html")
@@ -94,25 +98,27 @@ Always call `discover_schemes_logic` and `search_guidelines_logic` to check veri
 
 @app.post("/chat", dependencies=[Depends(check_rate_limit)])
 def public_chat(req: ChatRequest):
-    response = ai_client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents=req.message,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT,
-            tools=[discover_schemes_logic, search_guidelines_logic],
-            temperature=0.2,
-        ),
-    )
-    return {"reply": response.text or "No matching information found."}
+    try:
+        response = ai_client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=req.message,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                tools=[discover_schemes_logic, search_guidelines_logic],
+                temperature=0.2,
+            ),
+        )
+        return {"reply": response.text or "No matching information found."}
+    except Exception as e:
+        return {"reply": f"Backend error: {str(e)}"}
 
-# --- Protected REST Endpoints ---
 @app.get("/api/discover", dependencies=[Depends(check_rate_limit), Depends(verify_token)])
 def api_discover_schemes(target_group: Optional[str] = None, benefit_type: Optional[str] = None):
-    return {"schemes": discover_schemes_logic(target_group, benefit_type)}
+    return {"schemes": discover_schemes_logic(target_group or "", benefit_type or "")}
 
 @app.get("/api/guidelines", dependencies=[Depends(check_rate_limit), Depends(verify_token)])
 def api_search_guidelines(question: str, target_group: Optional[str] = None):
-    return {"guidelines": search_guidelines_logic(question, target_group)}
+    return {"guidelines": search_guidelines_logic(question, target_group or "")}
 
 @app.get("/health")
 def health():
