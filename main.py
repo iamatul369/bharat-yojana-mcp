@@ -3,10 +3,13 @@ import time
 from collections import defaultdict
 from typing import Optional
 from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi.responses import FileResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel
 from fastmcp import FastMCP
 from supabase import create_client
 from google import genai
+from google.genai import types
 
 SUPABASE_URL = os.environ["SUPABASE_URL"]
 SUPABASE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
@@ -34,6 +37,7 @@ def verify_token(creds: HTTPAuthorizationCredentials = Depends(security)):
 
 
 def discover_schemes_logic(target_group: Optional[str] = None, benefit_type: Optional[str] = None) -> list[dict]:
+    """Find Indian Central Government schemes filtered by target_group ('Student', 'Business', 'Citizen') or benefit_type ('Scholarship', 'Subsidy', 'Grant', 'Loan')."""
     q = supabase.table("central_schemes").select("*")
     if target_group:
         q = q.ilike("target_group", f"%{target_group}%")
@@ -43,7 +47,8 @@ def discover_schemes_logic(target_group: Optional[str] = None, benefit_type: Opt
 
 
 def search_guidelines_logic(question: str, target_group: Optional[str] = None) -> list[dict]:
-    emb = ai_client.models.embed_content(model="text-embedding-004", contents=question).embeddings[0].values
+    """Search official Indian ministry PDF guidelines for exact eligibility criteria, subsidy caps, and application rules."""
+    emb = ai_client.models.embed_content(model="text-embedding-004", contents=question).embeddings.values
     res = supabase.rpc("match_central_docs", {
         "query_embedding": emb,
         "match_count": 4,
@@ -68,22 +73,45 @@ def search_scheme_guidelines(question: str, target_group: Optional[str] = None) 
 mcp_app = mcp.http_app(path="/")
 app = FastAPI(
     title="Bharat Central Schemes & Opportunities API",
-    description="Discover Indian Central Government schemes, scholarships, startup grants, and subsidies for Students, Businesses, and Citizens.",
+    description="Discover Indian Central Government schemes, scholarships, startup grants, and subsidies.",
     version="1.0.0",
-    servers=[{"url": "https://bharat-yojana-mcp.onrender.com"}],
+    servers=[{"url": "https://onrender.com"}],
     lifespan=mcp_app.lifespan,
 )
 
 app.mount("/mcp", mcp_app)
 
+# --- Public Chat Webpage & Gemini 2.5 Flash Agent ---
+@app.get("/")
+def serve_chat_ui():
+    return FileResponse("index.html")
+
+class ChatRequest(BaseModel):
+    message: str
+
+SYSTEM_PROMPT = """You are 'Bharat Yojana Sahayak', an AI assistant helping Indian citizens, students, and business founders discover Central Government schemes, scholarships, startup grants, and subsidies.
+Always call `discover_schemes_logic` and `search_guidelines_logic` to check verified data before answering. Present clear scheme names, ministries, INR benefit limits, eligibility rules, and official portal URLs."""
+
+@app.post("/chat", dependencies=[Depends(check_rate_limit)])
+def public_chat(req: ChatRequest):
+    response = ai_client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=req.message,
+        config=types.GenerateContentConfig(
+            system_instruction=SYSTEM_PROMPT,
+            tools=[discover_schemes_logic, search_guidelines_logic],
+            temperature=0.2,
+        ),
+    )
+    return {"reply": response.text or "No matching information found."}
+
+# --- Protected REST Endpoints ---
 @app.get("/api/discover", dependencies=[Depends(check_rate_limit), Depends(verify_token)])
 def api_discover_schemes(target_group: Optional[str] = None, benefit_type: Optional[str] = None):
-    """Discover Central schemes for Students, Businesses, or Citizens."""
     return {"schemes": discover_schemes_logic(target_group, benefit_type)}
 
 @app.get("/api/guidelines", dependencies=[Depends(check_rate_limit), Depends(verify_token)])
 def api_search_guidelines(question: str, target_group: Optional[str] = None):
-    """Search official ministry PDF rules and eligibility details."""
     return {"guidelines": search_guidelines_logic(question, target_group)}
 
 @app.get("/health")
