@@ -43,7 +43,7 @@ def discover_schemes_logic(target_group: str = "", benefit_type: str = "") -> li
         q = q.ilike("target_group", f"%{target_group}%")
     if benefit_type:
         q = q.ilike("benefit_type", f"%{benefit_type}%")
-    return q.limit(15).execute().data or []
+    return q.limit(25).execute().data or []
 
 
 def search_guidelines_logic(question: str, target_group: str = "") -> list[dict]:
@@ -53,7 +53,7 @@ def search_guidelines_logic(question: str, target_group: str = "") -> list[dict]
         contents=question,
         config=types.EmbedContentConfig(output_dimensionality=768),
     )
-    emb = emb_res.embeddings[0].values
+    emb = emb_res.embeddings.values
     res = supabase.rpc("match_central_docs", {
         "query_embedding": emb,
         "match_count": 4,
@@ -98,7 +98,8 @@ Always call `discover_schemes_logic` and `search_guidelines_logic` to check veri
 
 @app.post("/chat", dependencies=[Depends(check_rate_limit)])
 def public_chat(req: ChatRequest):
-    for model_name in ["gemini-3.8-flash", "gemini-3.8-flash-lite"]:
+    last_err = ""
+    for model_name in ["gemini-3.8-flash-lite", "gemini-3.8-flash", "gemini-2.0-flash"]:
         try:
             response = ai_client.models.generate_content(
                 model=model_name,
@@ -113,7 +114,7 @@ def public_chat(req: ChatRequest):
         except Exception as e:
             last_err = str(e)
             continue
-    return {"reply": f"All AI models are temporarily busy. Please retry in a few seconds. ({last_err})"}
+    return {"reply": f"Google AI free tier is temporarily busy. Please retry in 5 seconds. ({last_err})"}
 
 @app.get("/api/discover", dependencies=[Depends(check_rate_limit), Depends(verify_token)])
 def api_discover_schemes(target_group: Optional[str] = None, benefit_type: Optional[str] = None):
